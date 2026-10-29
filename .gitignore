@@ -1,0 +1,33 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+TestResults/
+*.trx
+coverage/
+
+# Node / frontend
+node_modules/
+dist/
+*.tsbuildinfo
+playwright-report/
+test-results/
+.vite/
+
+# Backend serves the built frontend from wwwroot
+backend/src/Dayloom.Api/wwwroot/
+
+# Secrets & env
+.env
+.env.*
+!.env.example
+appsettings.*.local.json
+
+# Editors & OS
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db

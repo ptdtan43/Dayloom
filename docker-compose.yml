@@ -1,0 +1,23 @@
+name: dayloom
+
+services:
+  db:
+    # Keep in sync with the image in backend/tests/Dayloom.Api.Tests/Infrastructure/DayloomApiFactory.cs.
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: dayloom
+      POSTGRES_USER: dayloom
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (copy .env.example)}
+    ports:
+      - "5432:5432"
+    volumes:
+      # PostgreSQL 18+ images keep data under /var/lib/postgresql/<version>, so mount the parent.
+      - dayloom-db:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dayloom -d dayloom"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  dayloom-db:
