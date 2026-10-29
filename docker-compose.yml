@@ -9,7 +9,8 @@ services:
       POSTGRES_USER: dayloom
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (copy .env.example)}
     ports:
-      - "5432:5432"
+      # Loopback only: the dev DB must not be reachable from other machines on the network.
+      - "127.0.0.1:5432:5432"
     volumes:
       # PostgreSQL 18+ images keep data under /var/lib/postgresql/<version>, so mount the parent.
       - dayloom-db:/var/lib/postgresql
