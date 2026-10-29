@@ -8,12 +8,24 @@
 | (trống) | | | |
 
 ## Việc tiếp theo
-- [ ] Người chủ: commit đầu tiên, push lên `main` (repo đã tạo: github.com/ptdtan43/Dayloom) → xác nhận CI xanh
-- [ ] Codex review khung dự án (commit đầu tiên)
-- [ ] Auth: entity User (Identity), Session, RefreshToken + migration đầu tiên
+- [ ] Người chủ: commit fix review (lên `main`) + schema auth (nhánh `feat/auth`)
+- [ ] Codex review schema auth
+- [ ] Người chủ: xác nhận CI xanh trên tab Actions (repo private, agent không xem được)
 - [ ] Auth: endpoint register / login / refresh / logout theo `DESIGN.md` §2, kèm test
 
 ## Nhật ký
+### 2026-10-30 — Ngày 1, phần 4 (Claude Code)
+- Xử lý `docs/reviews/2026-10-30-scaffold-review.md`, đồng ý cả 2 phát hiện:
+  - SCAFFOLD-01: DB dev chỉ bind `127.0.0.1:5432`. Đã kiểm tra: `docker compose ps` → `127.0.0.1:5432->5432/tcp`.
+  - SCAFFOLD-02: connection string rỗng / chỉ khoảng trắng → không khởi động. Thêm `StartupTests` (2 case). `dotnet test`: **3/3 pass**.
+- Auth bước 1 (schema): `AppUser` (Identity, thêm `TimeZoneId`, `CreatedAt`), `Session`, `RefreshToken`; `IdentityUserContext` (không có bảng role); tên bảng/cột snake_case (`EFCore.NamingConventions`); migration `InitialAuthSchema`; `dotnet-ef` cài làm local tool (`dotnet-tools.json`).
+  - Tự phát hiện thêm: Identity mặc định tạo index email **không unique** → thêm unique index `ix_users_normalized_email`.
+  - Ràng buộc DB: hash token unique + đúng 32 byte, `expires > created`, xoá user thì xoá cascade session và token.
+  - `AuthSchemaTests` (6 test) + factory tự chạy migration.
+- Sự cố: ổ C: đầy (0 GB) giữa phiên → Docker Desktop sập. Xử lý: người chủ chuyển disk image Docker sang `D:\Docker\DockerDesktopWSL`; cache npm chuyển sang `D:\.caches\npm`. Cache NuGet **giữ nguyên trên C:** (biến `NUGET_PACKAGES` đã đặt rồi gỡ) để không ảnh hưởng project C# ở trường khi build offline. Ổ C: còn 7.37 GB.
+- Sau sự cố: `dotnet test` **9/9 pass**. Migration `InitialAuthSchema` đã áp vào DB dev (7 bảng).
+
+## Nhật ký (phần 1–3)
 ### 2026-10-30 — Ngày 1, phần 3 (Claude Code): dựng khung dự án
 - Cài .NET SDK 10.0.403, `global.json` cố định phiên bản. `git init` nhánh `main`.
 - Backend: `Dayloom.slnx`, `Dayloom.Api` (EF Core + Npgsql 10.0.3), endpoint `GET /api/health` kiểm tra kết nối DB (200 / 503). Thiếu connection string → app không khởi động. `TreatWarningsAsErrors` bật.

@@ -44,6 +44,8 @@ Backend dùng **một project API, chia thư mục theo tính năng** (vertical 
 | Bật DB | `docker compose up -d` (ở thư mục gốc) |
 | Chạy API | `cd backend/src/Dayloom.Api && dotnet run` → http://localhost:5080 |
 | Test backend | `cd backend && dotnet test` (cần Docker) |
+| Tạo migration | `dotnet ef migrations add <Tên> --project backend/src/Dayloom.Api --output-dir Data/Migrations` (ở thư mục gốc; lần đầu chạy `dotnet tool restore`) |
+| Áp migration vào DB dev | `dotnet ef database update --project backend/src/Dayloom.Api` |
 | Chạy frontend | `cd frontend && npm run dev` → http://localhost:5173 (proxy `/api` sang 5080) |
 | Kiểm tra frontend | `cd frontend && npm run lint && npm test && npm run build` |
 
