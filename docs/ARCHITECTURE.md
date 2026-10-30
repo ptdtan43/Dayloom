@@ -33,7 +33,10 @@ Dayloom dùng **Clean Architecture**, bên trong mỗi tầng chia thư mục th
 
 Quy tắc được giữ bằng 2 lớp:
 1. **Tham chiếu project:** Domain không tham chiếu project nào, nên trình biên dịch báo lỗi nếu Domain dùng EF Core.
-2. **Architecture test** (`tests/Dayloom.UnitTests/ArchitectureTests.cs`): kiểm tra Domain và Application không phụ thuộc ASP.NET, Npgsql hay Infrastructure.
+2. **Architecture test** (`tests/Dayloom.UnitTests/ArchitectureTests.cs`), dạng **allowlist** (chỉ cho phép những gì được liệt kê, còn lại đều bị từ chối):
+   - Đọc file `.csproj`: tham chiếu project đúng chiều; Domain và Application dùng SDK thường (không phải `Sdk.Web`), không `FrameworkReference`, chỉ có gói được phép.
+   - Đọc assembly đã build: Domain chỉ dùng thư viện chuẩn `System.*`; Application thêm được Domain, EF Core và DI abstractions.
+   - Có một **test đối chứng** đưa vào tên thư viện cấm (ví dụ logging) để chứng minh bộ kiểm tra không "pass tất".
 
 ## 2. Cấu trúc thư mục
 
@@ -73,6 +76,11 @@ Entity không phải "túi dữ liệu" với `get; set;` công khai. Thuộc t�
 - `token.MarkUsed(now)`: từ chối nếu token đã dùng.
 
 Lợi ích: không thể tạo dữ liệu sai từ code, và quy tắc nghiệp vụ test được bằng unit test không cần DB. Constructor `private` không tham số chỉ để EF Core dùng khi đọc dữ liệu lên.
+
+**`private set` chưa đủ để bất biến.** Ba cái bẫy đã gặp trong Dayloom (Codex tìm ra, xem `docs/reviews/2026-10-30-clean-architecture-review.md`):
+- **Mảng** (`byte[] TokenHash`): `private set` chỉ chặn gán mảng mới, không chặn sửa từng phần tử. Cách xử lý: sao chép khi nhận vào và khi trả ra; EF Core đọc/ghi thẳng field `_tokenHash`.
+- **Collection** (`IReadOnlyCollection<RefreshToken>`): nếu trả thẳng `List<T>`, người gọi chỉ cần ép kiểu về `List<T>` là thêm/xoá được, và EF còn xoá luôn hàng trong DB. Cách xử lý: trả `_refreshTokens.AsReadOnly()`; EF dùng field `_refreshTokens`.
+- **Thời gian**: phương thức phải kiểm tra cả hai đầu khoảng thời gian (không dùng token trước lúc tạo, không thu hồi phiên trước lúc bắt đầu), và khi từ chối thì không được thay đổi trạng thái.
 
 **Hai lớp bảo vệ:** Domain chặn dữ liệu sai từ code; ràng buộc DB (CHECK, unique index) chặn dữ liệu sai từ mọi nguồn khác (SQL tay, bug, migration). Test ở `IntegrationTests/Persistence/AuthSchemaTests.cs` cố tình lách qua Domain để chứng minh lớp DB vẫn hoạt động độc lập.
 

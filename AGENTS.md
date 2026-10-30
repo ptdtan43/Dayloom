@@ -32,6 +32,7 @@ Backend **bắt buộc** theo Clean Architecture, chi tiết và lý do ở `doc
 - **Api:** endpoint HTTP + `Program.cs` ráp các tầng. Không chứa logic nghiệp vụ.
 - Bên trong mỗi tầng chia thư mục theo tính năng (`Auth/`, `Tasks/`...).
 - Architecture test (`tests/Dayloom.UnitTests/ArchitectureTests.cs`) phải luôn pass.
+- **Migration đã push thì không bao giờ đổi tên, sinh lại hay xoá.** EF chỉ nhận ra migration bằng ID; đổi ID là DB đã áp sẽ chạy lại và lỗi. Muốn sửa schema thì thêm migration mới, và thêm ID vào `ShippedMigrations` trong `tests/Dayloom.IntegrationTests/Persistence/MigrationHistoryTests.cs`.
 
 ## Cấu trúc thư mục
 ```

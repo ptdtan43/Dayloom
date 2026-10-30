@@ -8,12 +8,24 @@
 | (trống) | | | |
 
 ## Việc tiếp theo
-- [ ] Người chủ: commit + push nhánh `refactor/clean-architecture`, xác nhận CI xanh
-- [ ] Codex review chuyển đổi Clean Architecture
+- [ ] Người chủ: commit + push sửa review CA, xác nhận CI xanh
+- [ ] Codex xác nhận 5 phát hiện CA-01..05
 - [ ] Người chủ: mở Pull Request `refactor/clean-architecture` → `main` (nền móng: Clean Architecture + schema auth), merge sau khi CI xanh và review xong
 - [ ] Auth: use case + endpoint register / login / refresh / logout theo `DESIGN.md` §2 (nhánh mới từ `main`)
 
 ## Nhật ký
+### 2026-10-30 — Ngày 1, phần 7 (Claude Code)
+- Xử lý `docs/reviews/2026-10-30-clean-architecture-review.md` (`aba1859..e406392`), đồng ý cả 5 phát hiện:
+  - **CA-01 (Cao):** khi chuyển sang Infrastructure tôi đã sinh lại migration → ID đổi `20261029220014` → `20261030070339`; DB đã áp bản cũ sẽ lỗi `relation "users" already exists`. Sửa: khôi phục ID gốc (file + `[Migration]`). So với `aba1859`: migration chỉ khác namespace. Thêm `MigrationHistoryTests` (danh sách `ShippedMigrations` đóng băng) + quy tắc trong AGENTS.md: migration đã push thì không đổi.
+  - **CA-02:** `TokenHash` sao chép khi nhận vào và trả ra; EF dùng field `_tokenHash`.
+  - **CA-03:** `RefreshTokens` trả `AsReadOnly()`; EF dùng field `_refreshTokens`.
+  - **CA-04:** `IsActive` xét cả `now >= CreatedAt`; `Revoke` từ chối thời điểm trước `CreatedAt`; `MarkUsed` chỉ trong `[CreatedAt, ExpiresAt)`. Khi từ chối, trạng thái không đổi.
+  - **CA-05:** ArchitectureTests chuyển sang **allowlist** ở 2 mức (`.csproj` + assembly), thêm test đối chứng với thư viện logging.
+- Thêm `AuthPersistenceTests`: round-trip đủ trạng thái private, tìm token theo hash, xoá lịch sử qua collection đã load bị chặn.
+- **Kiểm chứng ngược:** tạm đưa Domain về code cũ (`git stash`) → 8 unit test mới fail; code mới → pass. Việc này phát hiện 1 test của chính tôi viết sai (so sánh mảng với chính nó) → đã sửa.
+- `dotnet test`: unit **32/32**, integration **25/25**. DB dev đã áp lại migration với ID gốc.
+- Ghi nhận cho bước Auth (Codex nêu): `IAppDbContext` chưa có hợp đồng transaction / khoá hàng `FOR UPDATE` → thiết kế khi làm use case refresh.
+
 ### 2026-10-30 — Ngày 1, phần 6 (Claude Code): chuyển sang Clean Architecture
 - Người chủ chọn **Clean Architecture cố định** cho backend (để học và đưa vào CV). Nhánh `refactor/clean-architecture`, tách từ `feat/auth` (`aba1859`).
 - Tách 4 project: `Dayloom.Domain` (không tham chiếu gì) ← `Dayloom.Application` ← `Dayloom.Infrastructure` ← `Dayloom.Api`.
