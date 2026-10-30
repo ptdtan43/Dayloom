@@ -1,8 +1,12 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Dayloom.Api/Dayloom.Api.csproj" />
+    <Project Path="src/Dayloom.Application/Dayloom.Application.csproj" />
+    <Project Path="src/Dayloom.Domain/Dayloom.Domain.csproj" />
+    <Project Path="src/Dayloom.Infrastructure/Dayloom.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/Dayloom.Api.Tests/Dayloom.Api.Tests.csproj" />
+    <Project Path="tests/Dayloom.IntegrationTests/Dayloom.IntegrationTests.csproj" />
+    <Project Path="tests/Dayloom.UnitTests/Dayloom.UnitTests.csproj" />
   </Folder>
 </Solution>

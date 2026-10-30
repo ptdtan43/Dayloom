@@ -1,36 +1,16 @@
+using Dayloom.Domain.Auth;
+using Dayloom.Infrastructure.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace Dayloom.Api.Features.Auth;
-
-/// <summary>
-/// One login = one session = one family of rotating refresh tokens (docs/DESIGN.md §2).
-/// Revoking the session kills every refresh token in it.
-/// </summary>
-public class Session
-{
-    public static readonly TimeSpan MaxLifetime = TimeSpan.FromDays(14);
-
-    public Guid Id { get; set; }
-
-    public Guid UserId { get; set; }
-    public AppUser User { get; set; } = null!;
-
-    public DateTimeOffset CreatedAt { get; set; }
-
-    /// <summary>Hard limit (login + 14 days). Rotation never extends it.</summary>
-    public DateTimeOffset AbsoluteExpiresAt { get; set; }
-
-    public DateTimeOffset? RevokedAt { get; set; }
-
-    public List<RefreshToken> RefreshTokens { get; } = [];
-}
+namespace Dayloom.Infrastructure.Persistence.Configurations;
 
 public class SessionConfiguration : IEntityTypeConfiguration<Session>
 {
     public void Configure(EntityTypeBuilder<Session> session)
     {
-        session.HasOne(s => s.User)
+        // Domain only knows UserId; the foreign key to the Identity user table is a persistence detail.
+        session.HasOne<AppUser>()
             .WithMany()
             .HasForeignKey(s => s.UserId)
             .OnDelete(DeleteBehavior.Cascade);

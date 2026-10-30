@@ -1,10 +1,12 @@
 using System.Security.Cryptography;
-using Dayloom.Api.Features.Auth;
-using Dayloom.Api.Tests.Infrastructure;
+using Dayloom.Domain.Auth;
+using Dayloom.Infrastructure.Identity;
+using Dayloom.Infrastructure.Persistence;
+using Dayloom.IntegrationTests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
-namespace Dayloom.Api.Tests.Features.Auth;
+namespace Dayloom.IntegrationTests.Persistence;
 
 /// <summary>
 /// Guards the database-level rules from docs/DESIGN.md §2. These must hold even if application code has a bug,
@@ -12,6 +14,10 @@ namespace Dayloom.Api.Tests.Features.Auth;
 /// Every rejection test names the exact constraint it expects, so a different failure (another index, a missing FK)
 /// cannot make it pass by accident.
 /// </summary>
+/// <remarks>
+/// The domain model already refuses most invalid values, so these tests deliberately go around it
+/// (<c>db.Entry(...).Property(...).CurrentValue</c>) to prove the database is a second, independent line of defense.
+/// </remarks>
 public class AuthSchemaTests(DayloomApiFactory factory) : IClassFixture<DayloomApiFactory>
 {
     private static readonly DateTimeOffset Now = new(2026, 11, 2, 2, 0, 0, TimeSpan.Zero);
@@ -40,7 +46,7 @@ public class AuthSchemaTests(DayloomApiFactory factory) : IClassFixture<DayloomA
     [InlineData(nameof(AppUser.NormalizedEmail))]
     public async Task Rejects_a_user_without_email(string missingColumn)
     {
-        var user = NewUser($"{Guid.NewGuid()}@example.com");
+        var user = NewUser();
         if (missingColumn == nameof(AppUser.Email)) user.Email = null;
         else user.NormalizedEmail = null;
 
@@ -53,7 +59,20 @@ public class AuthSchemaTests(DayloomApiFactory factory) : IClassFixture<DayloomA
     public async Task Accepts_valid_users_with_different_emails()
     {
         await using var db = factory.CreateDbContext();
-        db.Users.AddRange(NewUser($"{Guid.NewGuid()}@example.com"), NewUser($"{Guid.NewGuid()}@example.com"));
+        db.Users.AddRange(NewUser(), NewUser());
+
+        await db.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task Accepts_a_session_and_refresh_token_created_through_the_domain()
+    {
+        var user = NewUser();
+        var session = Session.Start(user.Id, Now);
+        session.IssueRefreshToken(NewHash(), Now);
+        await using var db = factory.CreateDbContext();
+        db.Users.Add(user);
+        db.Sessions.Add(session);
 
         await db.SaveChangesAsync();
     }
@@ -61,21 +80,27 @@ public class AuthSchemaTests(DayloomApiFactory factory) : IClassFixture<DayloomA
     [Fact]
     public async Task Rejects_a_duplicate_refresh_token_hash()
     {
-        var session = NewSession();
+        var user = NewUser();
+        var session = Session.Start(user.Id, Now);
         var hash = NewHash();
-        session.RefreshTokens.Add(NewToken(hash));
-        session.RefreshTokens.Add(NewToken(hash));
+        session.IssueRefreshToken(hash, Now);
+        session.IssueRefreshToken(hash, Now);
 
-        await AssertRejectedAsync(PostgresErrorCodes.UniqueViolation, "ix_refresh_tokens_token_hash", db => db.Sessions.Add(session));
+        await AssertRejectedAsync(PostgresErrorCodes.UniqueViolation, "ix_refresh_tokens_token_hash", db => Add(db, user, session));
     }
 
     [Fact]
     public async Task Rejects_a_refresh_token_hash_of_the_wrong_length()
     {
-        var session = NewSession();
-        session.RefreshTokens.Add(NewToken(RandomNumberGenerator.GetBytes(16)));
+        var user = NewUser();
+        var session = Session.Start(user.Id, Now);
+        var token = session.IssueRefreshToken(NewHash(), Now);
 
-        await AssertRejectedAsync(PostgresErrorCodes.CheckViolation, "ck_refresh_tokens_hash_length", db => db.Sessions.Add(session));
+        await AssertRejectedAsync(PostgresErrorCodes.CheckViolation, "ck_refresh_tokens_hash_length", db =>
+        {
+            Add(db, user, session);
+            db.Entry(token).Property(t => t.TokenHash).CurrentValue = RandomNumberGenerator.GetBytes(16);
+        });
     }
 
     [Theory]
@@ -83,12 +108,15 @@ public class AuthSchemaTests(DayloomApiFactory factory) : IClassFixture<DayloomA
     [InlineData(-1)]
     public async Task Rejects_a_refresh_token_that_expires_at_or_before_creation(int minutesAfterCreation)
     {
-        var session = NewSession();
-        var token = NewToken(NewHash());
-        token.ExpiresAt = token.CreatedAt.AddMinutes(minutesAfterCreation);
-        session.RefreshTokens.Add(token);
+        var user = NewUser();
+        var session = Session.Start(user.Id, Now);
+        var token = session.IssueRefreshToken(NewHash(), Now);
 
-        await AssertRejectedAsync(PostgresErrorCodes.CheckViolation, "ck_refresh_tokens_expires_after_created", db => db.Sessions.Add(session));
+        await AssertRejectedAsync(PostgresErrorCodes.CheckViolation, "ck_refresh_tokens_expires_after_created", db =>
+        {
+            Add(db, user, session);
+            db.Entry(token).Property(t => t.ExpiresAt).CurrentValue = Now.AddMinutes(minutesAfterCreation);
+        });
     }
 
     [Theory]
@@ -96,19 +124,24 @@ public class AuthSchemaTests(DayloomApiFactory factory) : IClassFixture<DayloomA
     [InlineData(-1)]
     public async Task Rejects_a_session_that_expires_at_or_before_creation(int minutesAfterCreation)
     {
-        var session = NewSession();
-        session.AbsoluteExpiresAt = session.CreatedAt.AddMinutes(minutesAfterCreation);
+        var user = NewUser();
+        var session = Session.Start(user.Id, Now);
 
-        await AssertRejectedAsync(PostgresErrorCodes.CheckViolation, "ck_sessions_expires_after_created", db => db.Sessions.Add(session));
+        await AssertRejectedAsync(PostgresErrorCodes.CheckViolation, "ck_sessions_expires_after_created", db =>
+        {
+            Add(db, user, session);
+            db.Entry(session).Property(s => s.AbsoluteExpiresAt).CurrentValue = Now.AddMinutes(minutesAfterCreation);
+        });
     }
 
     [Fact]
     public async Task Accepts_a_session_of_exactly_the_maximum_lifetime()
     {
+        var user = NewUser();
+        var session = Session.Start(user.Id, Now);
+        Assert.Equal(Now + Session.MaxLifetime, session.AbsoluteExpiresAt);
         await using var db = factory.CreateDbContext();
-        var session = NewSession();
-        session.AbsoluteExpiresAt = session.CreatedAt + Session.MaxLifetime;
-        db.Sessions.Add(session);
+        Add(db, user, session);
 
         await db.SaveChangesAsync();
     }
@@ -118,26 +151,31 @@ public class AuthSchemaTests(DayloomApiFactory factory) : IClassFixture<DayloomA
     [InlineData("1.00:00:00")]
     public async Task Rejects_a_session_longer_than_the_maximum_lifetime(string extra)
     {
-        var session = NewSession();
-        session.AbsoluteExpiresAt = session.CreatedAt + Session.MaxLifetime + TimeSpan.Parse(extra);
+        var user = NewUser();
+        var session = Session.Start(user.Id, Now);
 
-        await AssertRejectedAsync(PostgresErrorCodes.CheckViolation, "ck_sessions_max_lifetime", db => db.Sessions.Add(session));
+        await AssertRejectedAsync(PostgresErrorCodes.CheckViolation, "ck_sessions_max_lifetime", db =>
+        {
+            Add(db, user, session);
+            db.Entry(session).Property(s => s.AbsoluteExpiresAt).CurrentValue = Now + Session.MaxLifetime + TimeSpan.Parse(extra);
+        });
     }
 
     [Fact]
     public async Task Deleting_a_user_removes_their_sessions_and_tokens()
     {
-        var session = NewSession();
-        session.RefreshTokens.Add(NewToken(NewHash()));
+        var user = NewUser();
+        var session = Session.Start(user.Id, Now);
+        session.IssueRefreshToken(NewHash(), Now);
         await using (var db = factory.CreateDbContext())
         {
-            db.Sessions.Add(session);
+            Add(db, user, session);
             await db.SaveChangesAsync();
         }
 
         await using (var db = factory.CreateDbContext())
         {
-            await db.Users.Where(u => u.Id == session.User.Id).ExecuteDeleteAsync();
+            await db.Users.Where(u => u.Id == user.Id).ExecuteDeleteAsync();
 
             Assert.False(await db.Sessions.AnyAsync(s => s.Id == session.Id));
             Assert.False(await db.RefreshTokens.AnyAsync(t => t.SessionId == session.Id));
@@ -145,7 +183,7 @@ public class AuthSchemaTests(DayloomApiFactory factory) : IClassFixture<DayloomA
     }
 
     /// <summary>Saves the change and asserts PostgreSQL rejected it with exactly this error code and constraint.</summary>
-    private async Task<PostgresException> AssertRejectedAsync(string sqlState, string? constraint, Action<Dayloom.Api.Data.AppDbContext> arrange)
+    private async Task<PostgresException> AssertRejectedAsync(string sqlState, string? constraint, Action<AppDbContext> arrange)
     {
         await using var db = factory.CreateDbContext();
         arrange(db);
@@ -158,29 +196,26 @@ public class AuthSchemaTests(DayloomApiFactory factory) : IClassFixture<DayloomA
         return postgres;
     }
 
+    private static void Add(AppDbContext db, AppUser user, Session session)
+    {
+        db.Users.Add(user);
+        db.Sessions.Add(session);
+    }
+
     private static byte[] NewHash() => RandomNumberGenerator.GetBytes(RefreshToken.HashLengthInBytes);
 
-    private static AppUser NewUser(string email, string? userName = null) => new()
+    private static AppUser NewUser(string? email = null, string? userName = null)
     {
-        Id = Guid.NewGuid(),
-        UserName = userName ?? email,
-        NormalizedUserName = (userName ?? email).ToUpperInvariant(),
-        Email = email,
-        NormalizedEmail = email.ToUpperInvariant(),
-        CreatedAt = Now,
-    };
-
-    private static Session NewSession() => new()
-    {
-        User = NewUser($"{Guid.NewGuid()}@example.com"),
-        CreatedAt = Now,
-        AbsoluteExpiresAt = Now + Session.MaxLifetime,
-    };
-
-    private static RefreshToken NewToken(byte[] hash) => new()
-    {
-        TokenHash = hash,
-        CreatedAt = Now,
-        ExpiresAt = Now + Session.MaxLifetime,
-    };
+        email ??= $"{Guid.NewGuid()}@example.com";
+        userName ??= email;
+        return new AppUser
+        {
+            Id = Guid.NewGuid(),
+            UserName = userName,
+            NormalizedUserName = userName.ToUpperInvariant(),
+            Email = email,
+            NormalizedEmail = email.ToUpperInvariant(),
+            CreatedAt = Now,
+        };
+    }
 }

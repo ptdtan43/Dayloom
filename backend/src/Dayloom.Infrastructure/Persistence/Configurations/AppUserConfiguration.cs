@@ -1,21 +1,8 @@
-using Microsoft.AspNetCore.Identity;
+using Dayloom.Infrastructure.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace Dayloom.Api.Features.Auth;
-
-/// <summary>
-/// Identity handles email, password hashing and lockout; we only add what Dayloom needs on top.
-/// </summary>
-public class AppUser : IdentityUser<Guid>
-{
-    public const string DefaultTimeZoneId = "Asia/Ho_Chi_Minh";
-
-    /// <summary>IANA time zone used for every date boundary shown to this user (docs/DESIGN.md §3).</summary>
-    public string TimeZoneId { get; set; } = DefaultTimeZoneId;
-
-    public DateTimeOffset CreatedAt { get; set; }
-}
+namespace Dayloom.Infrastructure.Persistence.Configurations;
 
 public class AppUserConfiguration : IEntityTypeConfiguration<AppUser>
 {

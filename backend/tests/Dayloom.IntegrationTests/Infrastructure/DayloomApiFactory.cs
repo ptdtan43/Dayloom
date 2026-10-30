@@ -1,10 +1,10 @@
-using Dayloom.Api.Data;
+using Dayloom.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Testcontainers.PostgreSql;
 
-namespace Dayloom.Api.Tests.Infrastructure;
+namespace Dayloom.IntegrationTests.Infrastructure;
 
 /// <summary>
 /// Boots the real API against a throwaway PostgreSQL container, so integration tests hit a real database

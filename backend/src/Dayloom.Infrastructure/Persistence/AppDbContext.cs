@@ -1,12 +1,15 @@
-using Dayloom.Api.Features.Auth;
+using Dayloom.Application.Common.Interfaces;
+using Dayloom.Domain.Auth;
+using Dayloom.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
-namespace Dayloom.Api.Data;
+namespace Dayloom.Infrastructure.Persistence;
 
 // IdentityUserContext (not IdentityDbContext): users only, no role tables, since Dayloom has no roles.
-public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityUserContext<AppUser, Guid>(options)
+public class AppDbContext(DbContextOptions<AppDbContext> options)
+    : IdentityUserContext<AppUser, Guid>(options), IAppDbContext
 {
     public DbSet<Session> Sessions => Set<Session>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();

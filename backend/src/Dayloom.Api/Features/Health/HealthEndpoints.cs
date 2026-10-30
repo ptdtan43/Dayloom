@@ -1,4 +1,6 @@
-using Dayloom.Api.Data;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using InfrastructureSetup = Dayloom.Infrastructure.DependencyInjection;
 
 namespace Dayloom.Api.Features.Health;
 
@@ -6,17 +8,23 @@ public static class HealthEndpoints
 {
     public static IEndpointRouteBuilder MapHealthEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/health", async (AppDbContext db, CancellationToken cancellationToken) =>
-        {
-            var databaseUp = await db.Database.CanConnectAsync(cancellationToken);
-
-            return databaseUp
-                ? Results.Ok(new HealthResponse("ok", "ok"))
-                : Results.Json(new HealthResponse("degraded", "unreachable"), statusCode: StatusCodes.Status503ServiceUnavailable);
-        })
-        .WithName("GetHealth");
+        // Built-in health checks: Infrastructure registers the database check, the API only decides the response shape.
+        // Status code comes from the middleware: 200 when healthy, 503 when the database check fails.
+        app.MapHealthChecks("/api/health", new HealthCheckOptions { ResponseWriter = WriteResponseAsync });
 
         return app;
+    }
+
+    private static Task WriteResponseAsync(HttpContext context, HealthReport report)
+    {
+        var databaseUp = report.Entries.TryGetValue(InfrastructureSetup.DatabaseHealthCheckName, out var database)
+            && database.Status == HealthStatus.Healthy;
+
+        var response = report.Status == HealthStatus.Healthy
+            ? new HealthResponse("ok", "ok")
+            : new HealthResponse("degraded", databaseUp ? "ok" : "unreachable");
+
+        return context.Response.WriteAsJsonAsync(response);
     }
 }
 
