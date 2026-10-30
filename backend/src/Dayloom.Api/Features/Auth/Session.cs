@@ -9,6 +9,8 @@ namespace Dayloom.Api.Features.Auth;
 /// </summary>
 public class Session
 {
+    public static readonly TimeSpan MaxLifetime = TimeSpan.FromDays(14);
+
     public Guid Id { get; set; }
 
     public Guid UserId { get; set; }
@@ -33,8 +35,15 @@ public class SessionConfiguration : IEntityTypeConfiguration<Session>
             .HasForeignKey(s => s.UserId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        session.ToTable(t => t.HasCheckConstraint(
-            "ck_sessions_expires_after_created",
-            "absolute_expires_at > created_at"));
+        session.ToTable(t =>
+        {
+            t.HasCheckConstraint("ck_sessions_expires_after_created", "absolute_expires_at > created_at");
+
+            // Expressed in hours, not days: adding '14 days' to a timestamptz follows calendar days and can
+            // come out as 335 or 337 hours across a DST change. The limit is an absolute duration.
+            t.HasCheckConstraint(
+                "ck_sessions_max_lifetime",
+                $"absolute_expires_at <= created_at + interval '{(int)Session.MaxLifetime.TotalHours} hours'");
+        });
     }
 }

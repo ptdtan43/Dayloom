@@ -21,8 +21,8 @@ namespace Dayloom.Api.Data.Migrations
                     created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     user_name = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
                     normalized_user_name = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
-                    email = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
-                    normalized_email = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
+                    email = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
+                    normalized_email = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
                     email_confirmed = table.Column<bool>(type: "boolean", nullable: false),
                     password_hash = table.Column<string>(type: "text", nullable: true),
                     security_stamp = table.Column<string>(type: "text", nullable: true),
@@ -53,6 +53,7 @@ namespace Dayloom.Api.Data.Migrations
                 {
                     table.PrimaryKey("pk_sessions", x => x.id);
                     table.CheckConstraint("ck_sessions_expires_after_created", "absolute_expires_at > created_at");
+                    table.CheckConstraint("ck_sessions_max_lifetime", "absolute_expires_at <= created_at + interval '336 hours'");
                     table.ForeignKey(
                         name: "fk_sessions_users_user_id",
                         column: x => x.user_id,

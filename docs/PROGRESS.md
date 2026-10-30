@@ -8,12 +8,20 @@
 | (trống) | | | |
 
 ## Việc tiếp theo
-- [ ] Người chủ: commit fix review (lên `main`) + schema auth (nhánh `feat/auth`)
-- [ ] Codex review schema auth
+- [ ] Người chủ: commit sửa review schema auth lên `feat/auth`
 - [ ] Người chủ: xác nhận CI xanh trên tab Actions (repo private, agent không xem được)
 - [ ] Auth: endpoint register / login / refresh / logout theo `DESIGN.md` §2, kèm test
 
 ## Nhật ký
+### 2026-10-30 — Ngày 1, phần 5 (Claude Code)
+- Xử lý `docs/reviews/2026-10-30-auth-schema-review.md` (commit `11b3bc5`), đồng ý cả 3 phát hiện:
+  - AUTH-SCHEMA-01: test email trùng trước đây pass nhờ index username. Viết lại: hai username khác nhau, cùng email. **Mọi test từ chối giờ kiểm tra đúng `SqlState` + tên constraint** (helper `AssertRejectedAsync`). Thêm test CHECK `expires_at > created_at` của refresh token, và test đối chứng với dữ liệu hợp lệ.
+  - AUTH-SCHEMA-02: `email`, `normalized_email` → NOT NULL (unique index của PostgreSQL cho qua nhiều NULL).
+  - AUTH-SCHEMA-03: thêm CHECK `ck_sessions_max_lifetime`: `absolute_expires_at <= created_at + interval '336 hours'` (dùng giờ, không dùng ngày, để không lệch khi đổi DST). Test: đúng 14 ngày → OK; +1 micro giây, +1 ngày → bị chặn.
+- Sinh lại migration `InitialAuthSchema` thay vì thêm migration mới: nhánh chưa merge, chưa có DB nào ngoài dev/test.
+- Ghi nhận (không sửa): DB không ép `RefreshToken.ExpiresAt <= Session.AbsoluteExpiresAt` vì CHECK của PostgreSQL không tham chiếu được bảng khác → code tạo token phải đảm bảo, và có test ở bước endpoint.
+- `dotnet test`: **18/18 pass**. Migration mới đã áp vào DB dev.
+
 ### 2026-10-30 — Ngày 1, phần 4 (Claude Code)
 - Xử lý `docs/reviews/2026-10-30-scaffold-review.md`, đồng ý cả 2 phát hiện:
   - SCAFFOLD-01: DB dev chỉ bind `127.0.0.1:5432`. Đã kiểm tra: `docker compose ps` → `127.0.0.1:5432->5432/tcp`.

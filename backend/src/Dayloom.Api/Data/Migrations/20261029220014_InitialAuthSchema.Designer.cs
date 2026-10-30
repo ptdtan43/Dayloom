@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Dayloom.Api.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20261029211522_InitialAuthSchema")]
+    [Migration("20261029220014_InitialAuthSchema")]
     partial class InitialAuthSchema
     {
         /// <inheritdoc />
@@ -46,6 +46,7 @@ namespace Dayloom.Api.Data.Migrations
                         .HasColumnName("created_at");
 
                     b.Property<string>("Email")
+                        .IsRequired()
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)")
                         .HasColumnName("email");
@@ -63,6 +64,7 @@ namespace Dayloom.Api.Data.Migrations
                         .HasColumnName("lockout_end");
 
                     b.Property<string>("NormalizedEmail")
+                        .IsRequired()
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)")
                         .HasColumnName("normalized_email");
@@ -195,6 +197,8 @@ namespace Dayloom.Api.Data.Migrations
                     b.ToTable("sessions", null, t =>
                         {
                             t.HasCheckConstraint("ck_sessions_expires_after_created", "absolute_expires_at > created_at");
+
+                            t.HasCheckConstraint("ck_sessions_max_lifetime", "absolute_expires_at <= created_at + interval '336 hours'");
                         });
                 });
 
