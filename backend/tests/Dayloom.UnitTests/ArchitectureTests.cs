@@ -32,7 +32,7 @@ public class ArchitectureTests
     public void Project_references_point_only_inwards(string project)
     {
         var declared = ReadProject(project).Descendants("ProjectReference")
-            .Select(reference => Path.GetFileNameWithoutExtension(reference.Attribute("Include")!.Value))
+            .Select(reference => ProjectName(reference.Attribute("Include")!.Value))
             .Order();
 
         Assert.Equal(Layers[project].Projects.Order(), declared);
@@ -78,6 +78,21 @@ public class ArchitectureTests
             ["Microsoft.Extensions.Logging.Abstractions", "Npgsql"],
             FindViolations(referenced, IsAllowedInApplication));
     }
+
+    [Theory]
+    [InlineData(@"..\Dayloom.Domain\Dayloom.Domain.csproj")] // how dotnet writes it on Windows
+    [InlineData("../Dayloom.Domain/Dayloom.Domain.csproj")]
+    public void Project_name_is_read_the_same_on_every_operating_system(string include)
+    {
+        Assert.Equal("Dayloom.Domain", ProjectName(include));
+    }
+
+    /// <summary>
+    /// .csproj files store Windows-style paths ("..\Dayloom.Domain\Dayloom.Domain.csproj"). On Linux (CI),
+    /// backslash is not a directory separator, so normalize it before taking the file name.
+    /// </summary>
+    private static string ProjectName(string include) =>
+        Path.GetFileNameWithoutExtension(include.Replace('\\', '/'));
 
     private static bool IsBaseClassLibrary(string name) =>
         name is "netstandard" or "mscorlib" or "System" || name.StartsWith("System.", StringComparison.Ordinal);
