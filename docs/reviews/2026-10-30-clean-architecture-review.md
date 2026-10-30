@@ -104,3 +104,19 @@ Các probe dùng F# Interactive/Roslyn có sẵn trong SDK, nhận code qua stdi
 - Không kiểm thử register/login/refresh/logout, cookie, JWT hoặc HTTP authorization; các tính năng đó chưa thuộc đợt chuyển đổi. Không yêu cầu MediatR, repository cho từng entity hoặc đổi quyết định EF trong Application.
 - Không xác nhận CI GitHub của repo private; các kết quả trên là chạy local với Docker.
 - Chỉ tạo `docs/reviews/2026-10-30-clean-architecture-review.md`; không sửa code, project, migration, test, AGENTS hay PROGRESS; không commit/push. Claude Code xử lý phát hiện và cập nhật PROGRESS theo phân vai.
+
+## Xác nhận sau khi sửa
+
+Ngày 2026-10-30, đối chiếu các bản sửa `e406392..e48d87f2950522f5290626589f0b3fdc5365104b` trên `refactor/clean-architecture` và nhật ký “Ngày 1, phần 7”. Working tree sạch trước khi bổ sung mục này.
+
+**Kiểm thử thực tế:** `cd backend && dotnet test` **PASS 57/57**, exit 0: unit **32 passed, 0 failed, 0 skipped** (565 ms); integration **25 passed, 0 failed, 0 skipped** (15 giây). Thời gian là số VSTest báo, không gồm toàn bộ restore/build.
+
+- **CA-01 — ĐÃ GIẢI QUYẾT:** khôi phục file và `[Migration]` về `20261029220014_InitialAuthSchema`; migration chính vẫn giống `aba1859` ngoài namespace. Dùng lại probe trên DB Testcontainers có schema đó, history ID cũ và dữ liệu mẫu: pending migrations = 0; `Migrate()` thành công, history không đổi, Session và hai token cùng trạng thái cũ được giữ nguyên; không còn lỗi `42P07`. Có thêm `MigrationHistoryTests` bảo vệ ID đã phát hành.
+- **CA-02 — ĐÃ GIẢI QUYẾT:** probe sửa mảng đầu vào và mảng getter đều không đổi hash bên trong; sửa hash nhận từ token đã load rồi SaveChanges cũng không đổi hash trong DB. EF map field `_tokenHash`; round-trip và test tìm token theo hash đều pass.
+- **CA-03 — ĐÃ GIẢI QUYẾT:** probe cast collection đã load sang `ICollection<RefreshToken>` rồi Remove token tổ tiên bị `NotSupportedException`; sau SaveChanges cả token gốc và token con vẫn còn. Wrapper `AsReadOnly()` bảo vệ public collection, EF vẫn đọc qua `_refreshTokens` và round-trip đúng.
+- **CA-04 — ĐÃ GIẢI QUYẾT:** dùng lại bốn tình huống thời gian sai: issue/revoke trước Session.CreatedAt, MarkUsed trước token.CreatedAt và đúng ExpiresAt đều bị từ chối, state không đổi. Control tại CreatedAt, ngay trước expiry, biên IsActive và Revoke idempotent đều đúng.
+- **CA-05 — ĐÃ GIẢI QUYẾT:** dùng lại assembly logging leak và EF leak tổng hợp trong RAM, đưa qua checker allowlist hiện tại: cả hai đều bị nhận diện vi phạm Domain. Đã đối chiếu thêm kiểm tra `.csproj` cho project/package/framework và graph bốn tầng; các architecture tests trong suite đều pass.
+
+Hai harness độc lập từ lần review trước được dùng lại qua stdin, chỉ điều chỉnh theo chữ ký checker mới và hành vi từ chối đã sửa; cả probe Domain/architecture và probe EF/migration hoàn chỉnh đều exit 0. Probe EF xác nhận lại private setter/backing field bằng thao tác lưu → clear tracker → Include, không chỉ kiểm tra đối tượng đang có trong bộ nhớ. Schema của DB probe tương đương baseline vì đã đối chiếu nội dung migration; không cần đổi history trên DB dev. Container PostgreSQL riêng được dispose trong `finally`, log xác nhận đã xóa.
+
+Tổng: **5 ĐÃ GIẢI QUYẾT, 0 CHƯA, 0 GIẢI QUYẾT SAI**. Không ghi nhận phát hiện mới mức Cao do các bản sửa này trong phạm vi xác nhận. Chỉ nối mục này vào cuối báo cáo; không sửa file khác, không commit/push.

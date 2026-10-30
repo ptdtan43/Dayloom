@@ -8,9 +8,8 @@
 | (trống) | | | |
 
 ## Việc tiếp theo
-- [ ] Người chủ: commit + push sửa review CA, xác nhận CI xanh
-- [ ] Codex xác nhận 5 phát hiện CA-01..05
-- [ ] Người chủ: mở Pull Request `refactor/clean-architecture` → `main` (nền móng: Clean Architecture + schema auth), merge sau khi CI xanh và review xong
+- [ ] Người chủ: mở Pull Request `refactor/clean-architecture` → `main` (nền móng: Clean Architecture + schema auth), merge sau khi CI xanh
+- [ ] Người chủ: sau khi merge, xoá nhánh `feat/auth` và `refactor/clean-architecture` trên GitHub
 - [ ] Auth: use case + endpoint register / login / refresh / logout theo `DESIGN.md` §2 (nhánh mới từ `main`)
 
 ## Nhật ký
@@ -25,6 +24,7 @@
 - **Kiểm chứng ngược:** tạm đưa Domain về code cũ (`git stash`) → 8 unit test mới fail; code mới → pass. Việc này phát hiện 1 test của chính tôi viết sai (so sánh mảng với chính nó) → đã sửa.
 - `dotnet test`: unit **32/32**, integration **25/25**. DB dev đã áp lại migration với ID gốc.
 - Ghi nhận cho bước Auth (Codex nêu): `IAppDbContext` chưa có hợp đồng transaction / khoá hàng `FOR UPDATE` → thiết kế khi làm use case refresh.
+- Codex xác nhận: **CA-01..05 đã giải quyết**, 57/57 pass; probe DB có history ID gốc migrate thành công, giữ nguyên dữ liệu. Không có phát hiện mới mức Cao.
 
 ### 2026-10-30 — Ngày 1, phần 6 (Claude Code): chuyển sang Clean Architecture
 - Người chủ chọn **Clean Architecture cố định** cho backend (để học và đưa vào CV). Nhánh `refactor/clean-architecture`, tách từ `feat/auth` (`aba1859`).
