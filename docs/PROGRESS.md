@@ -8,11 +8,25 @@
 | (trống) | | | |
 
 ## Việc tiếp theo
-- [ ] Người chủ: commit sửa review schema auth lên `feat/auth`
-- [ ] Người chủ: xác nhận CI xanh trên tab Actions (repo private, agent không xem được)
-- [ ] Auth: endpoint register / login / refresh / logout theo `DESIGN.md` §2, kèm test
+- [ ] Người chủ: commit + push nhánh `refactor/clean-architecture`, xác nhận CI xanh
+- [ ] Codex review chuyển đổi Clean Architecture
+- [ ] Người chủ: mở Pull Request `refactor/clean-architecture` → `main` (nền móng: Clean Architecture + schema auth), merge sau khi CI xanh và review xong
+- [ ] Auth: use case + endpoint register / login / refresh / logout theo `DESIGN.md` §2 (nhánh mới từ `main`)
 
 ## Nhật ký
+### 2026-10-30 — Ngày 1, phần 6 (Claude Code): chuyển sang Clean Architecture
+- Người chủ chọn **Clean Architecture cố định** cho backend (để học và đưa vào CV). Nhánh `refactor/clean-architecture`, tách từ `feat/auth` (`aba1859`).
+- Tách 4 project: `Dayloom.Domain` (không tham chiếu gì) ← `Dayloom.Application` ← `Dayloom.Infrastructure` ← `Dayloom.Api`.
+  - Domain: `Session`, `RefreshToken` thành rich domain model (`private set`, `Session.Start`, `IsActive`, `Revoke`, `IssueRefreshToken`, `MarkUsed`). Token hết hạn **cùng lúc** với phiên: đóng khoảng trống mà DB không ép được (ghi nhận ở phần 5).
+  - Application: `IAppDbContext`, `AddApplication()`.
+  - Infrastructure: `AppUser` (Identity), `AppDbContext`, cấu hình bảng, migration (`Persistence/Migrations`), `AddInfrastructure()`, health check `AddDbContextCheck`.
+  - Api: `Program.cs` chỉ ráp các tầng; `/api/health` dùng `MapHealthChecks` (giữ nguyên hợp đồng JSON với frontend).
+- Migration `InitialAuthSchema` sinh lại trong Infrastructure. So với bản cũ: **chỉ khác dòng namespace**, schema giữ nguyên.
+- Test tách 2 project: `Dayloom.UnitTests` (24 test: domain + architecture test, **0.4 giây**, không cần DB) và `Dayloom.IntegrationTests` (đổi tên từ `Dayloom.Api.Tests`, 20 test). Thêm test health trả 503 khi DB không kết nối được. `dotnet test`: **44/44 pass**.
+- Sự cố phát hiện khi chạy thật: chuỗi kết nối dev dùng `Host=localhost` → Windows thử IPv6 `::1` trước, mà DB chỉ bind `127.0.0.1` (SCAFFOLD-01) → **mỗi kết nối mất ~2 giây** (đo: localhost 2040 ms, 127.0.0.1 0 ms). Sửa user-secrets và README sang `Host=127.0.0.1`. Health sau khi khởi động: 72–231 ms.
+- Viết `docs/ARCHITECTURE.md` (kiến trúc, lý do, câu hỏi phỏng vấn). AGENTS.md cập nhật quy tắc tầng và lệnh migration mới.
+
+## Nhật ký (phần 4–5)
 ### 2026-10-30 — Ngày 1, phần 5 (Claude Code)
 - Xử lý `docs/reviews/2026-10-30-auth-schema-review.md` (commit `11b3bc5`), đồng ý cả 3 phát hiện:
   - AUTH-SCHEMA-01: test email trùng trước đây pass nhờ index username. Viết lại: hai username khác nhau, cùng email. **Mọi test từ chối giờ kiểm tra đúng `SqlState` + tên constraint** (helper `AssertRejectedAsync`). Thêm test CHECK `expires_at > created_at` của refresh token, và test đối chứng với dữ liệu hợp lệ.
@@ -89,7 +103,13 @@
 | 2026-10-30 | Refresh token: Session tuyệt đối 14 ngày, rotation nguyên tử, dùng lại → thu hồi cả Session | RFC 9700; chống đánh cắp token (AUTH-02, AUTH-04) |
 | 2026-10-30 | Frontend thời gian: `date-fns` + `@date-fns/tz`, ngày giữ dạng chuỗi | Tránh lệch ngày do JS `Date` (TIME-02) |
 | 2026-10-30 | Markdown: `react-markdown` không `rehype-raw`, không ảnh, có CSP | Chống stored XSS (AC-02) |
-| 2026-10-30 | Backend một project, chia thư mục theo tính năng | Dự án nhỏ; ít tầng thì dễ hiểu, tách Clean Architecture khi thật sự cần |
+| 2026-10-30 | ~~Backend một project, chia thư mục theo tính năng~~ → thay bằng dòng dưới | |
+| 2026-10-30 | **Clean Architecture cố định** (Domain / Application / Infrastructure / Api), vertical slice bên trong | Người chủ muốn học vững; chuyển khi mới ~10 file là rẻ nhất. Chi tiết: `docs/ARCHITECTURE.md` |
+| 2026-10-30 | `AppUser` ở Infrastructure; Domain chỉ biết `UserId` | Domain không được phụ thuộc ASP.NET Identity |
+| 2026-10-30 | Rich domain model (`private set` + phương thức có kiểm tra) | Không tạo được dữ liệu sai từ code; quy tắc test được không cần DB |
+| 2026-10-30 | `IAppDbContext` thay vì repository cho từng entity | Ít code thừa; đánh đổi: Application tham chiếu gói EF Core (chỉ abstraction) |
+| 2026-10-30 | Không dùng MediatR; mỗi use case một class handler | MediatR thương mại hoá từ 2025; ít "ma thuật", dễ debug |
+| 2026-10-30 | Chuỗi kết nối dev dùng `127.0.0.1`, không dùng `localhost` | DB chỉ bind IPv4; `localhost` thử IPv6 trước, mất 2 giây mỗi kết nối |
 | 2026-10-30 | PostgreSQL 18 (dev, test, CI cùng image `postgres:18-alpine`) | Bản ổn định mới nhất; test và dev giống nhau |
 | 2026-10-30 | Giữ nguyên toolchain của template Vite (TS 7, oxlint) + Vitest 5 | Mặc định mới nhất của Vite, nhanh; không tự cấu hình ESLint |
 | 2026-10-30 | Connection string dev trong user-secrets, mật khẩu DB trong `.env` | Không commit secret (AGENTS.md) |
