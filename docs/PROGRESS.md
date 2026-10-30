@@ -8,11 +8,14 @@
 | (trống) | | | |
 
 ## Việc tiếp theo
-- [ ] Người chủ: mở Pull Request `refactor/clean-architecture` → `main` (nền móng: Clean Architecture + schema auth), merge sau khi CI xanh
-- [ ] Người chủ: sau khi merge, xoá nhánh `feat/auth` và `refactor/clean-architecture` trên GitHub
-- [ ] Auth: use case + endpoint register / login / refresh / logout theo `DESIGN.md` §2 (nhánh mới từ `main`)
+- [ ] Auth: use case + endpoint register / login / refresh / logout theo `DESIGN.md` §2, trên nhánh `feat/auth-endpoints` tách từ `main`
 
 ## Nhật ký
+### 2026-10-30 — Mốc: PR #1 đã merge
+- PR #1 "Foundation: Clean Architecture backend and auth schema" merge vào `main` (`6dfb1ec`, merge commit). **CI xanh cả backend và frontend** (lần đầu xác nhận được).
+- Đã xoá nhánh `feat/auth`, `refactor/clean-architecture` (local + GitHub). Xoá thư mục `bin/obj` sót của `Dayloom.Api.Tests` (do extension C# build lại project cũ khi switch về `main` cũ).
+- Kiểm tra trên `main`: unit 34/34, integration 25/25, frontend lint/test 4/4/build OK, DB dev đã áp `20261029220014_InitialAuthSchema`.
+
 ### 2026-10-30 — Ngày 1, phần 8 (Claude Code): CI đỏ lần đầu
 - PR `refactor/clean-architecture` → `main`: CI backend **fail 3 test** `Project_references_point_only_inwards` (Api, Application, Infrastructure). Integration 25/25 pass trên Linux.
 - Nguyên nhân: `.csproj` lưu đường dẫn kiểu Windows `..\Dayloom.Domain\Dayloom.Domain.csproj`; trên Linux `\` không phải dấu phân cách → `Path.GetFileNameWithoutExtension` trả nguyên chuỗi. Máy dev là Windows nên local không thấy.
