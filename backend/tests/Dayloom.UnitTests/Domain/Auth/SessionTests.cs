@@ -38,13 +38,56 @@ public class SessionTests
     }
 
     [Fact]
-    public void Is_active_until_the_absolute_expiry()
+    public void Is_active_from_creation_until_the_absolute_expiry()
     {
         var session = Session.Start(UserId, Now);
 
+        Assert.False(session.IsActive(Now.AddTicks(-1)));
         Assert.True(session.IsActive(Now));
         Assert.True(session.IsActive(session.AbsoluteExpiresAt.AddTicks(-1)));
         Assert.False(session.IsActive(session.AbsoluteExpiresAt));
+    }
+
+    [Fact]
+    public void Cannot_be_revoked_before_it_started_and_state_is_unchanged()
+    {
+        var session = Session.Start(UserId, Now);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => session.Revoke(Now.AddTicks(-1)));
+        Assert.Null(session.RevokedAt);
+    }
+
+    [Fact]
+    public void Can_be_revoked_at_the_moment_it_started()
+    {
+        var session = Session.Start(UserId, Now);
+
+        session.Revoke(Now);
+
+        Assert.Equal(Now, session.RevokedAt);
+    }
+
+    [Fact]
+    public void Cannot_issue_a_refresh_token_before_the_session_started()
+    {
+        var session = Session.Start(UserId, Now);
+
+        Assert.Throws<InvalidOperationException>(() => session.IssueRefreshToken(NewHash(), Now.AddTicks(-1)));
+        Assert.Empty(session.RefreshTokens);
+    }
+
+    [Fact]
+    public void Token_history_cannot_be_changed_by_casting_the_collection()
+    {
+        var session = Session.Start(UserId, Now);
+        var token = session.IssueRefreshToken(NewHash(), Now);
+        var asCollection = (ICollection<RefreshToken>)session.RefreshTokens;
+
+        Assert.Throws<NotSupportedException>(() => asCollection.Remove(token));
+        Assert.Throws<NotSupportedException>(() => asCollection.Clear());
+        Assert.Throws<NotSupportedException>(() => asCollection.Add(token));
+        Assert.IsNotType<List<RefreshToken>>(session.RefreshTokens);
+        Assert.Single(session.RefreshTokens);
     }
 
     [Fact]

@@ -8,12 +8,18 @@ public class RefreshToken
 {
     public const int HashLengthInBytes = 32;
 
+    // Arrays are mutable even behind a private setter, so the hash is copied on the way in and on the way out.
+    private byte[] _tokenHash = [];
+
     // Required by EF Core to materialize rows; tokens are created through Session.IssueRefreshToken().
     private RefreshToken() { }
 
     public Guid Id { get; private set; }
     public Guid SessionId { get; private set; }
-    public byte[] TokenHash { get; private set; } = [];
+
+    /// <summary>A copy of the hash: changing the returned array does not change the token.</summary>
+    public byte[] TokenHash => (byte[])_tokenHash.Clone();
+
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset ExpiresAt { get; private set; }
 
@@ -29,6 +35,11 @@ public class RefreshToken
         if (IsUsed)
         {
             throw new InvalidOperationException("A refresh token can only be used once.");
+        }
+
+        if (now < CreatedAt || IsExpired(now))
+        {
+            throw new ArgumentOutOfRangeException(nameof(now), now, "A refresh token can only be used between its creation and expiry.");
         }
 
         UsedAt = now.ToUniversalTime();
@@ -50,7 +61,7 @@ public class RefreshToken
         {
             Id = Guid.CreateVersion7(createdAt),
             SessionId = sessionId,
-            TokenHash = tokenHash,
+            _tokenHash = (byte[])tokenHash.Clone(),
             CreatedAt = createdAt,
             ExpiresAt = expiresAt,
         };

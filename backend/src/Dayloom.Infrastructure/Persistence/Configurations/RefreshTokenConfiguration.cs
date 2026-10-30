@@ -8,6 +8,10 @@ public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
 {
     public void Configure(EntityTypeBuilder<RefreshToken> token)
     {
+        // The public getter returns a copy; EF Core reads and writes the private array directly.
+        token.Property(t => t.TokenHash)
+            .HasField("_tokenHash")
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
         token.HasIndex(t => t.TokenHash).IsUnique();
 
         token.HasOne<Session>()

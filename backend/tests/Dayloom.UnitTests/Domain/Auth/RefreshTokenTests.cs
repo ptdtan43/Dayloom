@@ -37,6 +37,37 @@ public class RefreshTokenTests
     }
 
     [Fact]
+    public void Can_be_used_from_creation_until_just_before_expiry()
+    {
+        var atCreation = NewToken();
+        var justBeforeExpiry = NewToken();
+
+        atCreation.MarkUsed(atCreation.CreatedAt);
+        justBeforeExpiry.MarkUsed(justBeforeExpiry.ExpiresAt.AddTicks(-1));
+
+        Assert.True(atCreation.IsUsed);
+        Assert.True(justBeforeExpiry.IsUsed);
+    }
+
+    [Fact]
+    public void Cannot_be_used_before_creation_and_state_is_unchanged()
+    {
+        var token = NewToken();
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => token.MarkUsed(token.CreatedAt.AddTicks(-1)));
+        Assert.False(token.IsUsed);
+    }
+
+    [Fact]
+    public void Cannot_be_used_once_expired_and_state_is_unchanged()
+    {
+        var token = NewToken();
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => token.MarkUsed(token.ExpiresAt));
+        Assert.False(token.IsUsed);
+    }
+
+    [Fact]
     public void Is_expired_from_its_expiry_time_onwards()
     {
         var token = NewToken();
@@ -45,6 +76,31 @@ public class RefreshTokenTests
         Assert.True(token.IsExpired(token.ExpiresAt));
     }
 
-    private static RefreshToken NewToken() =>
-        Session.Start(Guid.NewGuid(), Now).IssueRefreshToken(RandomNumberGenerator.GetBytes(RefreshToken.HashLengthInBytes), Now);
+    [Fact]
+    public void Changing_the_input_array_does_not_change_the_stored_hash()
+    {
+        var input = NewHash();
+        var original = (byte[])input.Clone();
+        var token = Session.Start(Guid.NewGuid(), Now).IssueRefreshToken(input, Now);
+
+        input[0] ^= 0xFF;
+
+        Assert.Equal(original, token.TokenHash);
+    }
+
+    [Fact]
+    public void Changing_the_returned_array_does_not_change_the_stored_hash()
+    {
+        var token = NewToken();
+        // Copy explicitly: if the getter leaked the internal array, "original" would change along with it.
+        var original = (byte[])token.TokenHash.Clone();
+
+        token.TokenHash[0] ^= 0xFF;
+
+        Assert.Equal(original, token.TokenHash);
+    }
+
+    private static byte[] NewHash() => RandomNumberGenerator.GetBytes(RefreshToken.HashLengthInBytes);
+
+    private static RefreshToken NewToken() => Session.Start(Guid.NewGuid(), Now).IssueRefreshToken(NewHash(), Now);
 }

@@ -15,6 +15,11 @@ public class SessionConfiguration : IEntityTypeConfiguration<Session>
             .HasForeignKey(s => s.UserId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        // The public property hands out a read-only wrapper; EF Core loads and tracks tokens through the private list.
+        session.Navigation(s => s.RefreshTokens)
+            .HasField("_refreshTokens")
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
+
         session.ToTable(t =>
         {
             t.HasCheckConstraint("ck_sessions_expires_after_created", "absolute_expires_at > created_at");
