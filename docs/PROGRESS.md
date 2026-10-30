@@ -13,6 +13,12 @@
 - [ ] Auth: use case + endpoint register / login / refresh / logout theo `DESIGN.md` §2 (nhánh mới từ `main`)
 
 ## Nhật ký
+### 2026-10-30 — Ngày 1, phần 8 (Claude Code): CI đỏ lần đầu
+- PR `refactor/clean-architecture` → `main`: CI backend **fail 3 test** `Project_references_point_only_inwards` (Api, Application, Infrastructure). Integration 25/25 pass trên Linux.
+- Nguyên nhân: `.csproj` lưu đường dẫn kiểu Windows `..\Dayloom.Domain\Dayloom.Domain.csproj`; trên Linux `\` không phải dấu phân cách → `Path.GetFileNameWithoutExtension` trả nguyên chuỗi. Máy dev là Windows nên local không thấy.
+- Tái hiện bằng container `mcr.microsoft.com/dotnet/sdk:10.0` (3 fail giống CI) → sửa: chuẩn hoá `\` → `/` (`ProjectName()`), thêm test cho cả 2 kiểu đường dẫn → Linux **34/34**, Windows **34/34**.
+- Thêm lệnh "Unit test trên Linux" vào AGENTS.md. Bài học: **đây là lần đầu CI thật sự chạy**; trước đó chưa xác nhận được CI nào xanh.
+
 ### 2026-10-30 — Ngày 1, phần 7 (Claude Code)
 - Xử lý `docs/reviews/2026-10-30-clean-architecture-review.md` (`aba1859..e406392`), đồng ý cả 5 phát hiện:
   - **CA-01 (Cao):** khi chuyển sang Infrastructure tôi đã sinh lại migration → ID đổi `20261029220014` → `20261030070339`; DB đã áp bản cũ sẽ lỗi `relation "users" already exists`. Sửa: khôi phục ID gốc (file + `[Migration]`). So với `aba1859`: migration chỉ khác namespace. Thêm `MigrationHistoryTests` (danh sách `ShippedMigrations` đóng băng) + quy tắc trong AGENTS.md: migration đã push thì không đổi.

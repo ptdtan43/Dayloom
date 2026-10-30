@@ -57,6 +57,7 @@ docker-compose.yml                # PostgreSQL cho dev (mật khẩu trong .env)
 | Chạy API | `cd backend/src/Dayloom.Api && dotnet run` → http://localhost:5080 |
 | Test backend | `cd backend && dotnet test` (integration test cần Docker) |
 | Chỉ unit test | `cd backend && dotnet test tests/Dayloom.UnitTests` (không cần Docker, dưới 1 giây) |
+| Unit test trên Linux (giống CI) | `docker run --rm -v "D:\MySchedule:/src:ro" mcr.microsoft.com/dotnet/sdk:10.0 bash -c 'mkdir -p /work && tar -C /src --exclude=bin --exclude=obj -cf - backend global.json \| tar -C /work -xf - && cd /work/backend && dotnet test tests/Dayloom.UnitTests'` (máy dev là Windows, CI là Linux: đường dẫn, dấu `\`, phân biệt hoa thường khác nhau) |
 | Tạo migration | `dotnet ef migrations add <Tên> --project backend/src/Dayloom.Infrastructure --startup-project backend/src/Dayloom.Api --output-dir Persistence/Migrations` (ở thư mục gốc; lần đầu chạy `dotnet tool restore`) |
 | Áp migration vào DB dev | `dotnet ef database update --project backend/src/Dayloom.Infrastructure --startup-project backend/src/Dayloom.Api` |
 | Chạy frontend | `cd frontend && npm run dev` → http://localhost:5173 (proxy `/api` sang 5080) |
