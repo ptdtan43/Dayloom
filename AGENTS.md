@@ -24,26 +24,42 @@ Thiết kế kỹ thuật (phạm vi MVP, auth, quy ước thời gian) nằm �
 
 Phiên bản thư viện được cố định khi khởi tạo (lock file, `global.json`). Không nâng cấp phiên bản khi chưa ghi lý do.
 
+## Kiến trúc backend: Clean Architecture (cố định)
+Backend **bắt buộc** theo Clean Architecture, chi tiết và lý do ở `docs/ARCHITECTURE.md`. Tóm tắt quy tắc khi viết code:
+- **Domain:** entity + quy tắc nghiệp vụ. Không tham chiếu project hay framework nào (không EF Core, không ASP.NET). Thuộc tính `private set`, thay đổi qua phương thức có kiểm tra (rich domain model).
+- **Application:** use case (mỗi use case một class handler, **không dùng MediatR**) + interface cho thứ cần từ bên ngoài. Truy cập DB qua `IAppDbContext`. Không tham chiếu Infrastructure, ASP.NET, Npgsql.
+- **Infrastructure:** cài đặt interface của Application: EF Core, Identity (`AppUser`), JWT, cấu hình bảng, migration.
+- **Api:** endpoint HTTP + `Program.cs` ráp các tầng. Không chứa logic nghiệp vụ.
+- Bên trong mỗi tầng chia thư mục theo tính năng (`Auth/`, `Tasks/`...).
+- Architecture test (`tests/Dayloom.UnitTests/ArchitectureTests.cs`) phải luôn pass.
+- **Migration đã push thì không bao giờ đổi tên, sinh lại hay xoá.** EF chỉ nhận ra migration bằng ID; đổi ID là DB đã áp sẽ chạy lại và lỗi. Muốn sửa schema thì thêm migration mới, và thêm ID vào `ShippedMigrations` trong `tests/Dayloom.IntegrationTests/Persistence/MigrationHistoryTests.cs`.
+
 ## Cấu trúc thư mục
 ```
 backend/
   Dayloom.slnx
-  src/Dayloom.Api/            # Web API; code chia theo tính năng: Features/<TênTínhNăng>/
-  tests/Dayloom.Api.Tests/    # xUnit; Infrastructure/DayloomApiFactory = API thật + PostgreSQL Testcontainers
-frontend/                     # React + Vite; code chia theo tính năng: src/features/<tên>/
-docs/                         # DESIGN.md, PROGRESS.md, reviews/
-docker-compose.yml            # PostgreSQL cho dev (mật khẩu trong .env)
+  src/Dayloom.Domain/             # entity + quy tắc nghiệp vụ
+  src/Dayloom.Application/        # use case + interface
+  src/Dayloom.Infrastructure/     # EF Core, Identity, migration (Persistence/Migrations)
+  src/Dayloom.Api/                # endpoint, Program.cs
+  tests/Dayloom.UnitTests/        # Domain/Application/architecture, không cần DB
+  tests/Dayloom.IntegrationTests/ # API thật + PostgreSQL Testcontainers (DayloomApiFactory)
+frontend/                         # React + Vite; code chia theo tính năng: src/features/<tên>/
+docs/                             # ARCHITECTURE.md, DESIGN.md, PROGRESS.md, reviews/
+docker-compose.yml                # PostgreSQL cho dev (mật khẩu trong .env)
 .github/workflows/ci.yml
 ```
-
-Backend dùng **một project API, chia thư mục theo tính năng** (vertical slice), chưa tách Clean Architecture nhiều project. Lý do: dự án nhỏ, ít tầng thì dễ hiểu và dễ giải thích hơn; tách sau khi thật sự cần.
 
 ## Lệnh thường dùng
 | Việc | Lệnh |
 |---|---|
 | Bật DB | `docker compose up -d` (ở thư mục gốc) |
 | Chạy API | `cd backend/src/Dayloom.Api && dotnet run` → http://localhost:5080 |
-| Test backend | `cd backend && dotnet test` (cần Docker) |
+| Test backend | `cd backend && dotnet test` (integration test cần Docker) |
+| Chỉ unit test | `cd backend && dotnet test tests/Dayloom.UnitTests` (không cần Docker, dưới 1 giây) |
+| Unit test trên Linux (giống CI) | `docker run --rm -v "D:\MySchedule:/src:ro" mcr.microsoft.com/dotnet/sdk:10.0 bash -c 'mkdir -p /work && tar -C /src --exclude=bin --exclude=obj -cf - backend global.json \| tar -C /work -xf - && cd /work/backend && dotnet test tests/Dayloom.UnitTests'` (máy dev là Windows, CI là Linux: đường dẫn, dấu `\`, phân biệt hoa thường khác nhau) |
+| Tạo migration | `dotnet ef migrations add <Tên> --project backend/src/Dayloom.Infrastructure --startup-project backend/src/Dayloom.Api --output-dir Persistence/Migrations` (ở thư mục gốc; lần đầu chạy `dotnet tool restore`) |
+| Áp migration vào DB dev | `dotnet ef database update --project backend/src/Dayloom.Infrastructure --startup-project backend/src/Dayloom.Api` |
 | Chạy frontend | `cd frontend && npm run dev` → http://localhost:5173 (proxy `/api` sang 5080) |
 | Kiểm tra frontend | `cd frontend && npm run lint && npm test && npm run build` |
 

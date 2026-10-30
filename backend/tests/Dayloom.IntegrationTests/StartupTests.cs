@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc.Testing;
 
-namespace Dayloom.Api.Tests;
+namespace Dayloom.IntegrationTests;
 
 public class StartupTests
 {

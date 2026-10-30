@@ -8,12 +8,64 @@
 | (trống) | | | |
 
 ## Việc tiếp theo
-- [ ] Người chủ: commit đầu tiên, push lên `main` (repo đã tạo: github.com/ptdtan43/Dayloom) → xác nhận CI xanh
-- [ ] Codex review khung dự án (commit đầu tiên)
-- [ ] Auth: entity User (Identity), Session, RefreshToken + migration đầu tiên
-- [ ] Auth: endpoint register / login / refresh / logout theo `DESIGN.md` §2, kèm test
+- [ ] Người chủ: mở Pull Request `refactor/clean-architecture` → `main` (nền móng: Clean Architecture + schema auth), merge sau khi CI xanh
+- [ ] Người chủ: sau khi merge, xoá nhánh `feat/auth` và `refactor/clean-architecture` trên GitHub
+- [ ] Auth: use case + endpoint register / login / refresh / logout theo `DESIGN.md` §2 (nhánh mới từ `main`)
 
 ## Nhật ký
+### 2026-10-30 — Ngày 1, phần 8 (Claude Code): CI đỏ lần đầu
+- PR `refactor/clean-architecture` → `main`: CI backend **fail 3 test** `Project_references_point_only_inwards` (Api, Application, Infrastructure). Integration 25/25 pass trên Linux.
+- Nguyên nhân: `.csproj` lưu đường dẫn kiểu Windows `..\Dayloom.Domain\Dayloom.Domain.csproj`; trên Linux `\` không phải dấu phân cách → `Path.GetFileNameWithoutExtension` trả nguyên chuỗi. Máy dev là Windows nên local không thấy.
+- Tái hiện bằng container `mcr.microsoft.com/dotnet/sdk:10.0` (3 fail giống CI) → sửa: chuẩn hoá `\` → `/` (`ProjectName()`), thêm test cho cả 2 kiểu đường dẫn → Linux **34/34**, Windows **34/34**.
+- Thêm lệnh "Unit test trên Linux" vào AGENTS.md. Bài học: **đây là lần đầu CI thật sự chạy**; trước đó chưa xác nhận được CI nào xanh.
+
+### 2026-10-30 — Ngày 1, phần 7 (Claude Code)
+- Xử lý `docs/reviews/2026-10-30-clean-architecture-review.md` (`aba1859..e406392`), đồng ý cả 5 phát hiện:
+  - **CA-01 (Cao):** khi chuyển sang Infrastructure tôi đã sinh lại migration → ID đổi `20261029220014` → `20261030070339`; DB đã áp bản cũ sẽ lỗi `relation "users" already exists`. Sửa: khôi phục ID gốc (file + `[Migration]`). So với `aba1859`: migration chỉ khác namespace. Thêm `MigrationHistoryTests` (danh sách `ShippedMigrations` đóng băng) + quy tắc trong AGENTS.md: migration đã push thì không đổi.
+  - **CA-02:** `TokenHash` sao chép khi nhận vào và trả ra; EF dùng field `_tokenHash`.
+  - **CA-03:** `RefreshTokens` trả `AsReadOnly()`; EF dùng field `_refreshTokens`.
+  - **CA-04:** `IsActive` xét cả `now >= CreatedAt`; `Revoke` từ chối thời điểm trước `CreatedAt`; `MarkUsed` chỉ trong `[CreatedAt, ExpiresAt)`. Khi từ chối, trạng thái không đổi.
+  - **CA-05:** ArchitectureTests chuyển sang **allowlist** ở 2 mức (`.csproj` + assembly), thêm test đối chứng với thư viện logging.
+- Thêm `AuthPersistenceTests`: round-trip đủ trạng thái private, tìm token theo hash, xoá lịch sử qua collection đã load bị chặn.
+- **Kiểm chứng ngược:** tạm đưa Domain về code cũ (`git stash`) → 8 unit test mới fail; code mới → pass. Việc này phát hiện 1 test của chính tôi viết sai (so sánh mảng với chính nó) → đã sửa.
+- `dotnet test`: unit **32/32**, integration **25/25**. DB dev đã áp lại migration với ID gốc.
+- Ghi nhận cho bước Auth (Codex nêu): `IAppDbContext` chưa có hợp đồng transaction / khoá hàng `FOR UPDATE` → thiết kế khi làm use case refresh.
+- Codex xác nhận: **CA-01..05 đã giải quyết**, 57/57 pass; probe DB có history ID gốc migrate thành công, giữ nguyên dữ liệu. Không có phát hiện mới mức Cao.
+
+### 2026-10-30 — Ngày 1, phần 6 (Claude Code): chuyển sang Clean Architecture
+- Người chủ chọn **Clean Architecture cố định** cho backend (để học và đưa vào CV). Nhánh `refactor/clean-architecture`, tách từ `feat/auth` (`aba1859`).
+- Tách 4 project: `Dayloom.Domain` (không tham chiếu gì) ← `Dayloom.Application` ← `Dayloom.Infrastructure` ← `Dayloom.Api`.
+  - Domain: `Session`, `RefreshToken` thành rich domain model (`private set`, `Session.Start`, `IsActive`, `Revoke`, `IssueRefreshToken`, `MarkUsed`). Token hết hạn **cùng lúc** với phiên: đóng khoảng trống mà DB không ép được (ghi nhận ở phần 5).
+  - Application: `IAppDbContext`, `AddApplication()`.
+  - Infrastructure: `AppUser` (Identity), `AppDbContext`, cấu hình bảng, migration (`Persistence/Migrations`), `AddInfrastructure()`, health check `AddDbContextCheck`.
+  - Api: `Program.cs` chỉ ráp các tầng; `/api/health` dùng `MapHealthChecks` (giữ nguyên hợp đồng JSON với frontend).
+- Migration `InitialAuthSchema` sinh lại trong Infrastructure. So với bản cũ: **chỉ khác dòng namespace**, schema giữ nguyên.
+- Test tách 2 project: `Dayloom.UnitTests` (24 test: domain + architecture test, **0.4 giây**, không cần DB) và `Dayloom.IntegrationTests` (đổi tên từ `Dayloom.Api.Tests`, 20 test). Thêm test health trả 503 khi DB không kết nối được. `dotnet test`: **44/44 pass**.
+- Sự cố phát hiện khi chạy thật: chuỗi kết nối dev dùng `Host=localhost` → Windows thử IPv6 `::1` trước, mà DB chỉ bind `127.0.0.1` (SCAFFOLD-01) → **mỗi kết nối mất ~2 giây** (đo: localhost 2040 ms, 127.0.0.1 0 ms). Sửa user-secrets và README sang `Host=127.0.0.1`. Health sau khi khởi động: 72–231 ms.
+- Viết `docs/ARCHITECTURE.md` (kiến trúc, lý do, câu hỏi phỏng vấn). AGENTS.md cập nhật quy tắc tầng và lệnh migration mới.
+
+## Nhật ký (phần 4–5)
+### 2026-10-30 — Ngày 1, phần 5 (Claude Code)
+- Xử lý `docs/reviews/2026-10-30-auth-schema-review.md` (commit `11b3bc5`), đồng ý cả 3 phát hiện:
+  - AUTH-SCHEMA-01: test email trùng trước đây pass nhờ index username. Viết lại: hai username khác nhau, cùng email. **Mọi test từ chối giờ kiểm tra đúng `SqlState` + tên constraint** (helper `AssertRejectedAsync`). Thêm test CHECK `expires_at > created_at` của refresh token, và test đối chứng với dữ liệu hợp lệ.
+  - AUTH-SCHEMA-02: `email`, `normalized_email` → NOT NULL (unique index của PostgreSQL cho qua nhiều NULL).
+  - AUTH-SCHEMA-03: thêm CHECK `ck_sessions_max_lifetime`: `absolute_expires_at <= created_at + interval '336 hours'` (dùng giờ, không dùng ngày, để không lệch khi đổi DST). Test: đúng 14 ngày → OK; +1 micro giây, +1 ngày → bị chặn.
+- Sinh lại migration `InitialAuthSchema` thay vì thêm migration mới: nhánh chưa merge, chưa có DB nào ngoài dev/test.
+- Ghi nhận (không sửa): DB không ép `RefreshToken.ExpiresAt <= Session.AbsoluteExpiresAt` vì CHECK của PostgreSQL không tham chiếu được bảng khác → code tạo token phải đảm bảo, và có test ở bước endpoint.
+- `dotnet test`: **18/18 pass**. Migration mới đã áp vào DB dev.
+
+### 2026-10-30 — Ngày 1, phần 4 (Claude Code)
+- Xử lý `docs/reviews/2026-10-30-scaffold-review.md`, đồng ý cả 2 phát hiện:
+  - SCAFFOLD-01: DB dev chỉ bind `127.0.0.1:5432`. Đã kiểm tra: `docker compose ps` → `127.0.0.1:5432->5432/tcp`.
+  - SCAFFOLD-02: connection string rỗng / chỉ khoảng trắng → không khởi động. Thêm `StartupTests` (2 case). `dotnet test`: **3/3 pass**.
+- Auth bước 1 (schema): `AppUser` (Identity, thêm `TimeZoneId`, `CreatedAt`), `Session`, `RefreshToken`; `IdentityUserContext` (không có bảng role); tên bảng/cột snake_case (`EFCore.NamingConventions`); migration `InitialAuthSchema`; `dotnet-ef` cài làm local tool (`dotnet-tools.json`).
+  - Tự phát hiện thêm: Identity mặc định tạo index email **không unique** → thêm unique index `ix_users_normalized_email`.
+  - Ràng buộc DB: hash token unique + đúng 32 byte, `expires > created`, xoá user thì xoá cascade session và token.
+  - `AuthSchemaTests` (6 test) + factory tự chạy migration.
+- Sự cố: ổ C: đầy (0 GB) giữa phiên → Docker Desktop sập. Xử lý: người chủ chuyển disk image Docker sang `D:\Docker\DockerDesktopWSL`; cache npm chuyển sang `D:\.caches\npm`. Cache NuGet **giữ nguyên trên C:** (biến `NUGET_PACKAGES` đã đặt rồi gỡ) để không ảnh hưởng project C# ở trường khi build offline. Ổ C: còn 7.37 GB.
+- Sau sự cố: `dotnet test` **9/9 pass**. Migration `InitialAuthSchema` đã áp vào DB dev (7 bảng).
+
+## Nhật ký (phần 1–3)
 ### 2026-10-30 — Ngày 1, phần 3 (Claude Code): dựng khung dự án
 - Cài .NET SDK 10.0.403, `global.json` cố định phiên bản. `git init` nhánh `main`.
 - Backend: `Dayloom.slnx`, `Dayloom.Api` (EF Core + Npgsql 10.0.3), endpoint `GET /api/health` kiểm tra kết nối DB (200 / 503). Thiếu connection string → app không khởi động. `TreatWarningsAsErrors` bật.
@@ -69,7 +121,13 @@
 | 2026-10-30 | Refresh token: Session tuyệt đối 14 ngày, rotation nguyên tử, dùng lại → thu hồi cả Session | RFC 9700; chống đánh cắp token (AUTH-02, AUTH-04) |
 | 2026-10-30 | Frontend thời gian: `date-fns` + `@date-fns/tz`, ngày giữ dạng chuỗi | Tránh lệch ngày do JS `Date` (TIME-02) |
 | 2026-10-30 | Markdown: `react-markdown` không `rehype-raw`, không ảnh, có CSP | Chống stored XSS (AC-02) |
-| 2026-10-30 | Backend một project, chia thư mục theo tính năng | Dự án nhỏ; ít tầng thì dễ hiểu, tách Clean Architecture khi thật sự cần |
+| 2026-10-30 | ~~Backend một project, chia thư mục theo tính năng~~ → thay bằng dòng dưới | |
+| 2026-10-30 | **Clean Architecture cố định** (Domain / Application / Infrastructure / Api), vertical slice bên trong | Người chủ muốn học vững; chuyển khi mới ~10 file là rẻ nhất. Chi tiết: `docs/ARCHITECTURE.md` |
+| 2026-10-30 | `AppUser` ở Infrastructure; Domain chỉ biết `UserId` | Domain không được phụ thuộc ASP.NET Identity |
+| 2026-10-30 | Rich domain model (`private set` + phương thức có kiểm tra) | Không tạo được dữ liệu sai từ code; quy tắc test được không cần DB |
+| 2026-10-30 | `IAppDbContext` thay vì repository cho từng entity | Ít code thừa; đánh đổi: Application tham chiếu gói EF Core (chỉ abstraction) |
+| 2026-10-30 | Không dùng MediatR; mỗi use case một class handler | MediatR thương mại hoá từ 2025; ít "ma thuật", dễ debug |
+| 2026-10-30 | Chuỗi kết nối dev dùng `127.0.0.1`, không dùng `localhost` | DB chỉ bind IPv4; `localhost` thử IPv6 trước, mất 2 giây mỗi kết nối |
 | 2026-10-30 | PostgreSQL 18 (dev, test, CI cùng image `postgres:18-alpine`) | Bản ổn định mới nhất; test và dev giống nhau |
 | 2026-10-30 | Giữ nguyên toolchain của template Vite (TS 7, oxlint) + Vitest 5 | Mặc định mới nhất của Vite, nhanh; không tự cấu hình ESLint |
 | 2026-10-30 | Connection string dev trong user-secrets, mật khẩu DB trong `.env` | Không commit secret (AGENTS.md) |

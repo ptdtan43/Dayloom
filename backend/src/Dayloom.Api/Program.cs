@@ -1,19 +1,12 @@
-using Dayloom.Api.Data;
 using Dayloom.Api.Features.Health;
-using Microsoft.EntityFrameworkCore;
+using Dayloom.Application;
+using Dayloom.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Fail fast: the app is useless without a database, so refuse to start instead of failing on the first request.
-var connectionString = builder.Configuration.GetConnectionString("Default");
-if (string.IsNullOrWhiteSpace(connectionString))
-{
-    throw new InvalidOperationException(
-        "Connection string 'Default' is missing or blank. In development, set it with: " +
-        "dotnet user-secrets set \"ConnectionStrings:Default\" \"<connection string>\"");
-}
-
-builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
+// Composition root: the API is the only place that knows every layer and wires them together.
+builder.Services.AddApplication();
+builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
