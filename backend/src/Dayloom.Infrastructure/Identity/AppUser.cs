@@ -1,3 +1,4 @@
+using Dayloom.Application.Common;
 using Microsoft.AspNetCore.Identity;
 
 namespace Dayloom.Infrastructure.Identity;
@@ -9,10 +10,8 @@ namespace Dayloom.Infrastructure.Identity;
 /// </summary>
 public class AppUser : IdentityUser<Guid>
 {
-    public const string DefaultTimeZoneId = "Asia/Ho_Chi_Minh";
-
     /// <summary>IANA time zone used for every date boundary shown to this user (docs/DESIGN.md §3).</summary>
-    public string TimeZoneId { get; set; } = DefaultTimeZoneId;
+    public string TimeZoneId { get; set; } = TimeZones.Default;
 
     public DateTimeOffset CreatedAt { get; set; }
 }
