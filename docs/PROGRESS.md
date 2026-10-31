@@ -17,6 +17,12 @@ Auth chia 6 bước trên nhánh `feat/auth-endpoints`, mỗi bước một lư�
 - [ ] 6. Chống CSRF (kiểm tra `Origin`, chỉ nhận JSON)
 
 ## Nhật ký
+### 2026-10-31 — Trang thử API: Scalar (Claude Code)
+- Người chủ hỏi "chưa có Swagger để test API à?". Thiếu sót của Claude Code: chỉ kiểm chứng bằng test và lệnh gọi tay, quên rằng người chủ cũng cần tự thử. Từ nay một endpoint mới phải kèm cách tự thử trên Scalar.
+- Thêm `Scalar.AspNetCore` 2.18.7 (MIT, không kéo thư viện khác). `MapScalarApiReference()` đọc tài liệu có sẵn `/openapi/v1.json`; trang ở `http://localhost:5080/scalar`. **Chỉ bật ở Development**, như OpenAPI.
+- Test `ApiDocsTests` (không cần Docker): Development trả 200 cho `/openapi/v1.json` và `/scalar`, tài liệu có `/api/auth/register`; Production trả 404. Thử bật cho Production (`if (true)`) → 2 test fail, đúng như mong đợi.
+- Test: unit **54/54**; `ApiDocsTests` **5/5**; chạy API thật, `/scalar` trả 200 trang "Scalar API Reference". Integration test cần Docker chưa chạy lại (Docker đang tắt, không file nào của chúng bị đổi).
+
 ### 2026-10-30 — Auth bước 1: đăng ký (Claude Code)
 - `POST /api/auth/register` → 201 `{id, email}`; 400 ValidationProblem; 409 `auth.email_taken`.
 - Application: `Result<T>` + `Error` (lỗi dự kiến trả về, không ném); `IIdentityService`; `RegisterUserHandler` (email trim, định dạng bằng `MailAddress` và phải là địa chỉ trần, ≤ 256; mật khẩu 8–128; múi giờ IANA hợp lệ hoặc mặc định `Asia/Ho_Chi_Minh`, từ chối id kiểu Windows); `TimeZones`.
@@ -154,6 +160,7 @@ Auth chia 6 bước trên nhánh `feat/auth-endpoints`, mỗi bước một lư�
 | 2026-10-30 | PostgreSQL 18 (dev, test, CI cùng image `postgres:18-alpine`) | Bản ổn định mới nhất; test và dev giống nhau |
 | 2026-10-30 | Giữ nguyên toolchain của template Vite (TS 7, oxlint) + Vitest 5 | Mặc định mới nhất của Vite, nhanh; không tự cấu hình ESLint |
 | 2026-10-30 | Connection string dev trong user-secrets, mật khẩu DB trong `.env` | Không commit secret (AGENTS.md) |
+| 2026-10-31 | Trang thử API: OpenAPI có sẵn của .NET + **Scalar**, không dùng Swashbuckle | Template .NET 9+ đã bỏ Swashbuckle; Scalar miễn phí (MIT), giao diện hiện đại, có sẵn code mẫu, gửi được JWT. Chỉ bật ở Development để không lộ danh sách endpoint |
 
 ## Lộ trình
 1. Tuần 1: monorepo, Docker, CI, DB schema, auth
