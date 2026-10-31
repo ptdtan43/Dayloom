@@ -8,9 +8,25 @@
 | (trống) | | | |
 
 ## Việc tiếp theo
-- [ ] Auth: use case + endpoint register / login / refresh / logout theo `DESIGN.md` §2, trên nhánh `feat/auth-endpoints` tách từ `main`
+Auth chia 6 bước trên nhánh `feat/auth-endpoints`, mỗi bước một lượt commit + Codex review:
+- [x] 1. Đăng ký `POST /api/auth/register`
+- [ ] 2. Phát JWT + sinh refresh token (cấu hình fail-fast, xác thực token)
+- [ ] 3. Đăng nhập `POST /api/auth/login` (lockout, tạo Session, cookie `__Host-`)
+- [ ] 4. Refresh `POST /api/auth/refresh` (transaction + `FOR UPDATE`, rotation, phát hiện dùng lại)
+- [ ] 5. Đăng xuất + `GET /api/auth/me`
+- [ ] 6. Chống CSRF (kiểm tra `Origin`, chỉ nhận JSON)
 
 ## Nhật ký
+### 2026-10-30 — Auth bước 1: đăng ký (Claude Code)
+- `POST /api/auth/register` → 201 `{id, email}`; 400 ValidationProblem; 409 `auth.email_taken`.
+- Application: `Result<T>` + `Error` (lỗi dự kiến trả về, không ném); `IIdentityService`; `RegisterUserHandler` (email trim, định dạng bằng `MailAddress` và phải là địa chỉ trần, ≤ 256; mật khẩu 8–128; múi giờ IANA hợp lệ hoặc mặc định `Asia/Ho_Chi_Minh`, từ chối id kiểu Windows); `TimeZones`.
+- Infrastructure: `AddIdentityCore` (không cookie, không `MapIdentityApi`), chính sách mật khẩu/lockout theo DESIGN §1 (5 lần → 15 phút); `IdentityService` đổi lỗi Identity sang `Error`, **bắt vi phạm unique index khi 2 người đăng ký cùng lúc → 409**; `TimeProvider` đăng ký `TryAdd` để test thay được.
+- Api: `ErrorResults.ToProblem()` (ProblemDetails + `code`), `AddProblemDetails`, `UseExceptionHandler` với `StatusCodeSelector` giữ 4xx cho `BadHttpRequestException`.
+- **Lỗi tìm ra nhờ test:** JSON hỏng trả 500 thay vì 400 (minimal API ném exception ở Development) → sửa bằng `StatusCodeSelector`.
+- **Kiểm chứng race condition:** tạm tắt `catch DbUpdateException` → 3/3 lần chạy test 10 request song song đều có 9 request lỗi 500. Có lại → pass. Race có thật.
+- Test: unit **54/54** (Windows + Linux container), integration **30/30**. Gọi tay API thật: 201 / 409 / 400 đúng định dạng.
+
+## Nhật ký (cũ)
 ### 2026-10-30 — Mốc: PR #1 đã merge
 - PR #1 "Foundation: Clean Architecture backend and auth schema" merge vào `main` (`6dfb1ec`, merge commit). **CI xanh cả backend và frontend** (lần đầu xác nhận được).
 - Đã xoá nhánh `feat/auth`, `refactor/clean-architecture` (local + GitHub). Xoá thư mục `bin/obj` sót của `Dayloom.Api.Tests` (do extension C# build lại project cũ khi switch về `main` cũ).
@@ -131,6 +147,10 @@
 | 2026-10-30 | `IAppDbContext` thay vì repository cho từng entity | Ít code thừa; đánh đổi: Application tham chiếu gói EF Core (chỉ abstraction) |
 | 2026-10-30 | Không dùng MediatR; mỗi use case một class handler | MediatR thương mại hoá từ 2025; ít "ma thuật", dễ debug |
 | 2026-10-30 | Chuỗi kết nối dev dùng `127.0.0.1`, không dùng `localhost` | DB chỉ bind IPv4; `localhost` thử IPv6 trước, mất 2 giây mỗi kết nối |
+| 2026-10-30 | Result pattern (`Result<T>`, `Error`) cho lỗi dự kiến | Lỗi nghiệp vụ là luồng bình thường; chữ ký hàm cho biết có thể thất bại |
+| 2026-10-30 | Lỗi API: ProblemDetails (RFC 9457) + trường `code`; frontend dịch sang tiếng Việt | API giữ tiếng Anh (AGENTS.md), UI tiếng Việt |
+| 2026-10-30 | Validation viết tay trong handler, không dùng FluentValidation | Ít quy tắc, dễ đọc và test; không thêm thư viện |
+| 2026-10-30 | Đăng ký không tự đăng nhập; frontend gọi login sau | Mỗi endpoint một việc; login có lockout và tạo Session riêng |
 | 2026-10-30 | PostgreSQL 18 (dev, test, CI cùng image `postgres:18-alpine`) | Bản ổn định mới nhất; test và dev giống nhau |
 | 2026-10-30 | Giữ nguyên toolchain của template Vite (TS 7, oxlint) + Vitest 5 | Mặc định mới nhất của Vite, nhanh; không tự cấu hình ESLint |
 | 2026-10-30 | Connection string dev trong user-secrets, mật khẩu DB trong `.env` | Không commit secret (AGENTS.md) |

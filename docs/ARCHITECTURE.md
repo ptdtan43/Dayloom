@@ -45,17 +45,20 @@ backend/src/
   Dayloom.Domain/
     Auth/                       Session, RefreshToken
   Dayloom.Application/
-    Common/Interfaces/          IAppDbContext
+    Common/Interfaces/          IAppDbContext, IIdentityService
+    Common/Results/             Result<T>, Error
+    Features/Auth/Register/     RegisterUserHandler
     DependencyInjection.cs      AddApplication()
   Dayloom.Infrastructure/
-    Identity/                   AppUser (kế thừa IdentityUser)
+    Identity/                   AppUser (kế thừa IdentityUser), IdentityService (dùng UserManager)
     Persistence/
       AppDbContext.cs
       Configurations/           cấu hình bảng: index, khoá ngoại, CHECK
       Migrations/
     DependencyInjection.cs      AddInfrastructure(): DB, health check
   Dayloom.Api/
-    Features/Health/
+    Common/                     ErrorResults: Error → ProblemDetails
+    Features/Auth/, Features/Health/
     Program.cs
 backend/tests/
   Dayloom.UnitTests/            Domain + Application + architecture. Không cần DB, chạy dưới 1 giây
@@ -90,6 +93,20 @@ Application truy cập DB qua `IAppDbContext`, có `DbSet<Session>`... thay vì 
 - **Được:** không phải viết hàng chục class repository chỉ để bọc lại EF Core; use case dùng LINQ đầy đủ.
 - **Mất:** Application phải tham chiếu gói `Microsoft.EntityFrameworkCore` (chỉ phần abstraction, không có Npgsql hay PostgreSQL). Người theo Clean Architecture "thuần" sẽ không chấp nhận điều này.
 - **Vì sao vẫn chọn:** EF Core đã là một Unit of Work và Repository. Bọc thêm một lớp nữa chủ yếu tăng code mà ít lợi ích thật. Template của Jason Taylor cũng chọn như vậy.
+
+### Use case = một class handler, trả về `Result<T>`
+Mỗi use case là một class trong `Application/Features/<TínhNăng>/<UseCase>/`, ví dụ `RegisterUserHandler`, có một phương thức `HandleAsync(command)`. Endpoint ở Api chỉ làm 3 việc: đổi request thành command, gọi handler, đổi kết quả thành HTTP.
+
+Lỗi **dự kiến được** (dữ liệu sai, email đã tồn tại) được **trả về** dưới dạng `Error`, không ném exception. Exception chỉ dành cho bug và sự cố (DB sập). Lý do: lỗi nghiệp vụ là một phần bình thường của luồng, người đọc code nhìn chữ ký hàm là biết nó có thể thất bại, và không tốn chi phí của exception.
+
+**Hợp đồng lỗi của API** (`Api/Common/ErrorResults.cs`): mọi lỗi theo chuẩn ProblemDetails (RFC 9457), kèm trường `code` ổn định để frontend tự hiển thị tiếng Việt.
+
+| `ErrorType` | HTTP | Ví dụ `code` |
+|---|---|---|
+| `Validation` | 400, kèm `errors` theo từng trường | `auth.invalid_registration` |
+| `Conflict` | 409 | `auth.email_taken` |
+| JSON hỏng, sai content type | 400 (giữ đúng mã nhờ `StatusCodeSelector`) | |
+| Exception không mong đợi | 500 | |
 
 ### Không dùng MediatR
 Từ 2025 MediatR chuyển sang giấy phép thương mại cho doanh nghiệp. Mỗi use case sẽ là một class handler bình thường, đăng ký trong `AddApplication()` và được endpoint gọi trực tiếp. Ít "ma thuật" hơn, dễ debug hơn.
