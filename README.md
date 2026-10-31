@@ -27,7 +27,7 @@ dotnet user-secrets set "ConnectionStrings:Default" "Host=127.0.0.1;Port=5432;Da
 cd ../../.. && dotnet tool restore
 dotnet ef database update --project backend/src/Dayloom.Infrastructure --startup-project backend/src/Dayloom.Api
 cd backend/src/Dayloom.Api
-dotnet run                      # http://localhost:5080
+dotnet run                      # http://localhost:5080, thử API tại http://localhost:5080/scalar
 
 # 3. Frontend (terminal khác)
 cd frontend

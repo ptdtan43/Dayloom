@@ -2,6 +2,7 @@ using Dayloom.Api.Features.Auth;
 using Dayloom.Api.Features.Health;
 using Dayloom.Application;
 using Dayloom.Infrastructure;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,9 +26,12 @@ app.UseExceptionHandler(new ExceptionHandlerOptions
 });
 app.UseStatusCodePages();
 
+// API docs are a development aid only: production does not advertise its endpoints.
+// MapOpenApi serves the description (/openapi/v1.json); Scalar renders it as a page to try requests (/scalar).
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.MapScalarApiReference();
 }
 
 app.MapHealthEndpoints();
